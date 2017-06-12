@@ -1,0 +1,76 @@
+﻿#Copyright 2017 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+#
+#Licensed under the Amazon Software License (the "License").
+#You may not use this file except in compliance with the License.
+#A copy of the License is located at
+#
+#  http://aws.amazon.com/asl/
+#
+#or in the "license" file accompanying this file. This file is distributed
+#on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+#express or implied. See the License for the specific language governing
+#permissions and limitations under the License.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: service-catalog-sync-lambda
+Resources:
+  LAMBDA:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: service-catalog-sync-lambda
+      Handler: sync-catalog.handler
+      Runtime: python2.7
+      Description: Function to sync service catalog with a configuration file
+      Code: ./
+      MemorySize: 128
+      Timeout: 300
+      Role: !GetAtt LAMBDAROLE.Arn
+  LAMBDAROLE:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub service-catalog-sync-lambda-role-${AWS::Region}
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            -
+              Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Path: /
+  LAMBDAPOLICY:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub service-catalog-sync-lambda-policy-${AWS::Region}
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - servicecatalog:*
+              - s3:*
+              - codepipeline:PutJobFailureResult
+              - codepipeline:PutJobSuccessResult
+              - cloudformation:ValidateTemplate
+              - iam:GetRole
+            Resource:
+              - "*"
+          -
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+      Roles:
+        -
+          !Ref LAMBDAROLE
+Outputs:
+  LambdaArn:
+    Description: ARN of the Lambda Function, which syncs up configuration files with yaml file
+    Value: !GetAtt LAMBDA.Arn
+    Export:
+      Name: service-catalog-sync-lambda

@@ -1,0 +1,107 @@
+#Copyright 2017 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+#
+#Licensed under the Amazon Software License (the "License").
+#You may not use this file except in compliance with the License.
+#A copy of the License is located at
+#
+#  http://aws.amazon.com/asl/
+#
+#or in the "license" file accompanying this file. This file is distributed
+#on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+#express or implied. See the License for the specific language governing
+#permissions and limitations under the License.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Launches VPC, NATGateways, Endpoints, 4 Subnet Architecture'
+Parameters:
+  EnvironmentName:
+    Description: Name of the VPC
+    AllowedPattern: "[a-z0-9]*"
+    Type: String
+    ConstraintDescription : Must begin with a letter. Lower case letters.Can include numbers.
+    MaxLength: 5
+    Default: dev
+Mappings:
+  VpcMap:
+    dev:
+      VpcCIDR: 10.0.0.0/16
+      Subnet1CIDR: 10.0.32.0/27
+      Subnet2CIDR: 10.0.64.0/27
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [VpcMap,!Ref EnvironmentName,VpcCIDR]
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      CidrBlock: !FindInMap [VpcMap,!Ref EnvironmentName,Subnet1CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} (Public)
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      CidrBlock: !FindInMap [VpcMap,!Ref EnvironmentName,Subnet2CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} (Public)
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet1
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet2
+
+Outputs:
+  Subnet1:
+    Value: !Ref Subnet1
+  Subnet2:
+    Value: !Ref Subnet2
+  VpcId:
+    Value: !Ref VPC

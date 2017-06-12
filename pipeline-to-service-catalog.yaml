@@ -1,0 +1,303 @@
+#Copyright 2017 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+#
+#Licensed under the Amazon Software License (the "License").
+#You may not use this file except in compliance with the License.
+#A copy of the License is located at
+#
+#  http://aws.amazon.com/asl/
+#
+#or in the "license" file accompanying this file. This file is distributed
+#on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+#express or implied. See the License for the specific language governing
+#permissions and limitations under the License.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: pipeline to service catalog
+Parameters:
+  RepositoryName:
+    Description: >
+      Name of the AWS CodeCommit that you wish to create, where you can push the code related to Service Catalog
+    Type: String
+Resources:
+  ServiceCatalogRepo:
+    Type: AWS::CodeCommit::Repository
+    DeletionPolicy: Retain
+    Properties:
+      RepositoryDescription: Holds Service Catalog code
+      RepositoryName: !Ref RepositoryName
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+  PipeLineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        -
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - codepipeline:*
+                  - iam:ListRoles
+                  - cloudformation:*
+                  - codecommit:List*
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                  - codecommit:UploadArchive
+                  - codecommit:CancelUploadArchive
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                  - iam:PassRole
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketLocation
+                  - lambda:InvokeFunction
+                  - lambda:ListFunctions
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - "*"
+              -
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketPolicy
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                 - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket, '/*']]
+                 - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket]]
+          PolicyName: !Sub ${AWS::StackName}-policy-${AWS::Region}
+  BuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      #RoleName: !Sub ${AWS::StackName}-CodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+  BuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn: ArtifactBucket
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}-CodeBuildPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetBucketPolicy
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+             - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket, '/*']]
+             - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket]]
+          -
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+      Roles:
+        -
+          !Ref BuildProjectRole
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref AWS::StackName
+      Description: !Sub ${AWS::StackName}-buildproject
+      ServiceRole: !GetAtt BuildProjectRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: linuxContainer
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:2.7.12
+        EnvironmentVariables:
+          - Name: S3Bucket
+            Value: !Ref ArtifactBucket
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.1
+          phases:
+            install:
+              commands:
+                - printenv
+                - ls -R
+                - cd scripts && pip install -r requirements.txt -t "$PWD"
+            build:
+              commands:
+                - cp lambda-cloudformation.yaml scripts/lambda-cloudformation.yaml
+                - cd scripts && aws cloudformation package --template-file lambda-cloudformation.yaml --s3-bucket $S3Bucket --s3-prefix catalog-sync-lambda/codebuild --output-template-file samtemplate.yaml
+          artifacts:
+            files: scripts/samtemplate.yaml
+            discard-paths: yes
+
+      TimeoutInMinutes: 10
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+  CFDeployerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      #RoleName: !Sub ${AWS::StackName}-cfdeployer-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+  CFDeployerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}-cfdeployer-policy-${AWS::Region}
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - lambda:AddPermission
+              - lambda:CreateFunction
+              - lambda:DeleteFunction
+              - lambda:InvokeFunction
+              - lambda:RemovePermission
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunctionConfiguration
+              - lambda:GetFunction
+              - lambda:UpdateFunctionConfiguration
+              - iam:CreateRole
+              - iam:CreatePolicy
+              - iam:GetRole
+              - iam:DeleteRole
+              - iam:PutRolePolicy
+              - iam:PassRole
+              - iam:DeleteRolePolicy
+              - cloudformation:*
+            Resource: "*"
+          -
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetBucketPolicy
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+             - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket, '/*']]
+             - !Join ['',['arn:aws:s3:::',!Ref ArtifactBucket]]
+      Roles:
+        -
+          !Ref CFDeployerRole
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn: PipeLineRole
+    Properties:
+      RoleArn: !GetAtt PipeLineRole.Arn
+      Name: !Ref AWS::StackName
+      Stages:
+        - Name: source-code-checkout
+          Actions:
+            - Name: App
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              Configuration:
+                RepositoryName: !GetAtt ServiceCatalogRepo.Name
+                BranchName: master
+              OutputArtifacts:
+                - Name: SCCheckoutArtifact
+              RunOrder: 1
+        -
+          Name: Build
+          Actions:
+          -
+            Name: build-lambda-function
+            ActionTypeId:
+              Category: Build
+              Owner: AWS
+              Version: 1
+              Provider: CodeBuild
+            Configuration:
+              ProjectName: !Ref BuildProject
+            RunOrder: 1
+            InputArtifacts:
+              - Name: SCCheckoutArtifact
+            OutputArtifacts:
+              - Name: BuildOutput
+        - Name: Deploy
+          Actions:
+            - Name: deploy-lambda-function
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: Deploy
+                ActionMode: CREATE_UPDATE
+                StackName: !Sub service-catalog-sync-lambda
+                Capabilities: CAPABILITY_NAMED_IAM
+                TemplatePath: BuildOutput::samtemplate.yaml
+                RoleArn: !GetAtt CFDeployerRole.Arn
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+        -
+          Name: Invoke
+          Actions:
+          -
+            Name: call-function
+            ActionTypeId:
+              Category: Invoke
+              Owner: AWS
+              Version: 1
+              Provider: Lambda
+            Configuration:
+              FunctionName: service-catalog-sync-lambda
+            InputArtifacts:
+                - Name: SCCheckoutArtifact
+            RunOrder: 1
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+Outputs:
+  ArtifactBucket:
+    Description: ArtifactBucket to be Used
+    Value: !Ref ArtifactBucket
+  RepositoryHttpUrl:
+    Description: CodeCommit Repository HTTP URL to push Service Catalog Related Artifacts
+    Value: !GetAtt ServiceCatalogRepo.CloneUrlHttp
+  RepositorySSHUrl:
+    Description: CodeCommit Repository SSH URL to push Service Catalog Related Artifacts
+    Value: !GetAtt ServiceCatalogRepo.CloneUrlSsh

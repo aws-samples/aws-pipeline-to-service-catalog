@@ -12,13 +12,13 @@ products:
   description: creates a sample dynamodb table
 accounts:
 - identifier: Sample AWS Account
-  number: 485873893626
+  number: 123456789012
 - identifier: Another
-  number: 454979696062
+  number: 123456789013
 tags:
 - Key: keynam1
   Value: value1
 - Key: keyname2
   Value: value2
 principals:
-- arn:aws:iam::256151769638:role/Admin
+- role/Admin

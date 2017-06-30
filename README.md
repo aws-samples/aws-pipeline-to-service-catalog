@@ -69,13 +69,12 @@ This configuration file is how your portfolio will look like in Service Catalog,
 
 * __principals (list)__  
     List of IAM Users, Roles or Groups to allow using the products in the portfolio in the current account.
-    Must start with __arn:aws:iam::__
     Must be either IAM Role (__role/SOME_ROLE__) or IAM User (__user/SOME_USR__)
     or IAM Group (__group/SOME_GROUP__)
     __Example:__
-        - arn:aws:iam::123456789012:role/Admin
-        - arn:aws:iam::123456789012:user/name
-        - arn:aws:iam::123456789012:group/AdminGroup
+        - role/Admin
+        - user/name
+        - group/AdminGroup
 
 
 

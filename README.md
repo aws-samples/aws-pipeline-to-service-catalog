@@ -1,10 +1,10 @@
 # Pipeline To Service Catalog
 
 This architecture and sample demoonstrates how to simplify management of the
-[AWS Service Catalogs]([service-catalog-url]),related products and sharing of portfolios with other
+[AWS Service Catalogs](https://aws.amazon.com/servicecatalog/),related products and sharing of portfolios with other
 accounts truly by maintaining them in version control, thereby adopting “Infrastructure as Code”
 practices. This solution also delivers the updates to the products using a Continuous Delivery
-[AWS CodePipeline](code-pipeline-url)
+[AWS CodePipeline](https://aws.amazon.com/codepipeline/)
 
 For more details, refer the blogpost
 
@@ -75,12 +75,3 @@ This configuration file is how your portfolio will look like in Service Catalog,
         - role/Admin
         - user/name
         - group/AdminGroup
-
-
-
-[code-commit-url]: https://aws.amazon.com/devops/continuous-delivery/
-[code-build-url]: https://aws.amazon.com/codebuild/
-[code-pipeline-url]: https://aws.amazon.com/codepipeline/
-[clouformation-url]: https://aws.amazon.com/cloudformation/
-[lambda-url]: https://aws.amazon.com/lambda/
-[service-catalog-url]: https://aws.amazon.com/servicecatalog/

@@ -1,6 +1,6 @@
 # Pipeline To Service Catalog
 
-This architecture and sample demoonstrates how to simplify management of the
+This architecture and sample demonstrates how to simplify management of the
 [AWS Service Catalogs](https://aws.amazon.com/servicecatalog/),related products and sharing of portfolios with other
 accounts truly by maintaining them in version control, thereby adopting “Infrastructure as Code”
 practices. This solution also delivers the updates to the products using a Continuous Delivery
